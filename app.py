@@ -91,7 +91,7 @@ if st.button("Download, Convert & Transcribe"):
                     with open(input_file, "rb") as f:
                         transcription = client.audio.transcriptions.create(
                             file=(f"{video_id}.m4a", f.read()),
-                            model="whisper-large-v3-turbo",
+                            model="whisper-large-v3",
                             language=lang_code,
                             response_format="verbose_json"
                         )
