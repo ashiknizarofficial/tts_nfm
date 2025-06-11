@@ -1,2 +1,2 @@
 streamlit
-youtube-transcript-api[proxies]
+youtube-transcript-api
