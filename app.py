@@ -96,20 +96,6 @@ if st.button("Download, Convert & Transcribe"):
                             response_format="verbose_json"
                         )
                     st.subheader("📝 Transcription Output:")
-                    st.markdown(
-                        f"""
-                        <textarea id="transcriptText" rows="15" style="width: 100%; font-family: monospace;">{transcription_text}</textarea>
-                        <br>
-                        <button onclick="copyTranscript()">📋 Copy to Clipboard</button>
-                        <script>
-                        function copyTranscript() {{
-                            var copyText = document.getElementById("transcriptText");
-                            copyText.select();
-                            document.execCommand("copy");
-                        }}
-                        </script>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    st.text_area("Transcript:", value=transcription.text, height=300)
                 except Exception as e:
                     st.error(f"❌ Groq transcription failed: {e}")
