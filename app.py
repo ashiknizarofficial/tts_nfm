@@ -1,12 +1,11 @@
 import streamlit as st
-import re
 import os
+import re
 import tempfile
 from urllib.parse import urlparse, parse_qs
-from pydub import AudioSegment
 import subprocess
 
-# Function to extract video ID
+# Extract YouTube video ID
 def extract_youtube_video_id(url):
     patterns = [
         r'youtu\.be/([^&?/]+)',
@@ -35,37 +34,40 @@ if st.button("Download and Convert"):
     else:
         video_id = extract_youtube_video_id(youtube_url)
         if not video_id:
-            st.error("❌ Could not extract a valid video ID.")
+            st.error("❌ Could not extract video ID.")
         else:
-            with st.spinner("Downloading and converting audio..."):
+            with st.spinner("Downloading and converting..."):
                 temp_dir = tempfile.mkdtemp()
-                audio_path = os.path.join(temp_dir, f"{video_id}.m4a")
-                output_wav = os.path.join(temp_dir, f"{video_id}.wav")
+                input_file = os.path.join(temp_dir, f"{video_id}.m4a")
+                output_file = os.path.join(temp_dir, f"{video_id}.wav")
 
-                # Use yt-dlp to download the audio
+                # 1. Download best audio using yt-dlp
                 try:
                     subprocess.run([
                         "yt-dlp",
                         "-f", "bestaudio[ext=m4a]/bestaudio",
-                        "-o", audio_path,
+                        "-o", input_file,
                         f"https://www.youtube.com/watch?v={video_id}"
                     ], check=True)
                 except subprocess.CalledProcessError:
-                    st.error("❌ Failed to download audio with yt-dlp.")
+                    st.error("❌ yt-dlp failed to download audio.")
                     st.stop()
 
-                # Convert to WAV
+                # 2. Convert to WAV using ffmpeg
                 try:
-                    audio = AudioSegment.from_file(audio_path)
-                    audio.export(output_wav, format="wav")
+                    subprocess.run([
+                        "ffmpeg", "-y", "-i", input_file, output_file
+                    ], check=True)
+                except subprocess.CalledProcessError:
+                    st.error("❌ ffmpeg conversion failed.")
+                    st.stop()
+
+                # 3. Offer download
+                with open(output_file, "rb") as f:
                     st.success("✅ Conversion complete!")
-                    
-                    with open(output_wav, "rb") as f:
-                        st.download_button(
-                            label="⬇️ Download WAV File",
-                            data=f,
-                            file_name=f"{video_id}.wav",
-                            mime="audio/wav"
-                        )
-                except Exception as e:
-                    st.error(f"❌ Conversion failed: {e}")
+                    st.download_button(
+                        label="⬇️ Download WAV File",
+                        data=f,
+                        file_name=f"{video_id}.wav",
+                        mime="audio/wav"
+                    )
