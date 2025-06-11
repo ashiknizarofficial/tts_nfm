@@ -4,8 +4,14 @@ import re
 import tempfile
 from urllib.parse import urlparse, parse_qs
 import subprocess
+from groq import Groq
 
-# Extract YouTube video ID
+# ==== CONFIGURE GROQ KEY HERE ====
+GROQ_API_KEY = "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"  # ← Replace with your actual Groq key
+
+client = Groq(api_key=GROQ_API_KEY)
+
+# ==== VIDEO ID PARSER ====
 def extract_youtube_video_id(url):
     patterns = [
         r'youtu\.be/([^&?/]+)',
@@ -23,12 +29,21 @@ def extract_youtube_video_id(url):
             return query['v'][0]
     return None
 
-# Streamlit UI
-st.title("🎵 YouTube to WAV Downloader")
+# ==== STREAMLIT UI ====
+st.title("🎵 YouTube to WAV + Groq Transcription")
 
 youtube_url = st.text_input("Enter YouTube Video URL:")
 
-if st.button("Download and Convert"):
+language_map = {
+    "Hindi": "hi",
+    "English": "en",
+    "Malayalam": "ml"
+}
+
+selected_lang = st.selectbox("Choose Transcription Language:", list(language_map.keys()))
+lang_code = language_map[selected_lang]
+
+if st.button("Download, Convert & Transcribe"):
     if not youtube_url:
         st.warning("Please enter a YouTube URL.")
     else:
@@ -36,12 +51,12 @@ if st.button("Download and Convert"):
         if not video_id:
             st.error("❌ Could not extract video ID.")
         else:
-            with st.spinner("Downloading and converting..."):
+            with st.spinner("Processing..."):
                 temp_dir = tempfile.mkdtemp()
                 input_file = os.path.join(temp_dir, f"{video_id}.m4a")
-                output_file = os.path.join(temp_dir, f"{video_id}.wav")
+                wav_file = os.path.join(temp_dir, f"{video_id}.wav")
 
-                # 1. Download best audio using yt-dlp
+                # Download audio with yt-dlp
                 try:
                     subprocess.run([
                         "yt-dlp",
@@ -53,21 +68,34 @@ if st.button("Download and Convert"):
                     st.error("❌ yt-dlp failed to download audio.")
                     st.stop()
 
-                # 2. Convert to WAV using ffmpeg
+                # Convert to WAV with ffmpeg
                 try:
                     subprocess.run([
-                        "ffmpeg", "-y", "-i", input_file, output_file
+                        "ffmpeg", "-y", "-i", input_file, wav_file
                     ], check=True)
                 except subprocess.CalledProcessError:
                     st.error("❌ ffmpeg conversion failed.")
                     st.stop()
 
-                # 3. Offer download
-                with open(output_file, "rb") as f:
-                    st.success("✅ Conversion complete!")
+                # Download option
+                with open(wav_file, "rb") as f:
                     st.download_button(
                         label="⬇️ Download WAV File",
                         data=f,
                         file_name=f"{video_id}.wav",
                         mime="audio/wav"
                     )
+
+                # Transcribe with Groq
+                try:
+                    with open(input_file, "rb") as f:
+                        transcription = client.audio.transcriptions.create(
+                            file=(f"{video_id}.m4a", f.read()),
+                            model="whisper-large-v3-turbo",
+                            language=lang_code,
+                            response_format="verbose_json"
+                        )
+                    st.subheader("📝 Transcription Output:")
+                    st.text_area("Transcript:", value=transcription.text, height=300)
+                except Exception as e:
+                    st.error(f"❌ Groq transcription failed: {e}")
