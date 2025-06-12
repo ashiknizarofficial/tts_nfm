@@ -150,13 +150,35 @@ def show_tts():
             audio_bytes = audio_file.read()
             audio_base64 = base64.b64encode(audio_bytes).decode()
     
-        # Embed autoplay audio
+        auto = "autoplay" if autoplay else ""
         st.markdown(
             f"""
-            <audio controls autoplay>
-                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-                Your browser does not support the audio element.
-            </audio>
+            <style>
+            .custom-audio-player {{
+                width: 100%;
+                max-width: 600px;
+                margin: 20px auto;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                background: #f0f2f6;
+                padding: 15px;
+                border-radius: 12px;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            }}
+            audio {{
+                width: 100%;
+                outline: none;
+                border-radius: 8px;
+            }}
+            </style>
+    
+            <div class="custom-audio-player">
+                <audio controls {auto}>
+                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
             """,
             unsafe_allow_html=True
         )
