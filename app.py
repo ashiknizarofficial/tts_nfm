@@ -15,7 +15,7 @@ from groq import Groq
 from pathlib import Path
 
 # ==== CONFIG ====
-GROQ_API_KEY = "your_groq_api_key"
+GROQ_API_KEY = "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"
 VALID_USERNAME = "ashik"
 VALID_PASSWORD = "pwd"
 client = Groq(api_key=GROQ_API_KEY)
@@ -114,7 +114,7 @@ def show_stt():
                     files = {
                         'file': f,
                         'language': (None, selected_lang.lower()),
-                        'vtt': (None, 'true')
+                        'vtt': (None, 'false')
                     }
                     response = requests.post('https://asr.iitm.ac.in/internal/asr/decode', files=files)
                     transcript = response.json().get("transcript", "No transcript found.")
@@ -139,7 +139,7 @@ def show_tts():
 
     language_label = st.selectbox("Language", list(VOICES.keys()))
     voice = st.selectbox("Voice", VOICES[language_label])
-    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.23, step=0.1)
     filename_input = st.text_input("Optional File Name", "")
     text_input = st.text_area("Text to Synthesize", height=150)
 
