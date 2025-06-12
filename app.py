@@ -44,7 +44,7 @@ def login():
     if st.button("Login"):
         if username == VALID_USERNAME and password == VALID_PASSWORD:
             st.session_state.authenticated = True
-            cookies.set("auth", "1", max_age_days=7)
+            cookies["auth"] = "1"
             st.experimental_rerun()
         else:
             st.error("❌ Invalid credentials")
