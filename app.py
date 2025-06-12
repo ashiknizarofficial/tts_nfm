@@ -152,21 +152,28 @@ def show_tts():
     language_label = st.selectbox("Language", list(VOICES.keys()))
     voice = st.selectbox("Voice", VOICES[language_label])
     speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
-    filename_input = st.text_input("Optional File Name", "")
+    filename_input = st.text_input("Optional File Name (without extension)", "")
     text_input = st.text_area("Text to Synthesize", height=150)
 
     if st.button("🛠️ Synthesize"):
         if not text_input.strip():
-            st.warning("Please enter text.")
+            st.warning("Please enter some text to synthesize.")
             return
 
+        # Calculate rate string
         rate_value = round((speed - 1) * 100)
         rate = f"{'+' if rate_value >= 0 else ''}{rate_value}%"
-        IST = timezone(timedelta(hours=5, minutes=30))
-        timestamp = datetime.now(IST).strftime("%d-%m-%Y_%H-%M-%S")
-        filename = f"{filename_input.strip() + '_' if filename_input.strip() else ''}{timestamp}.mp3"
-        filepath = OUTPUT_FOLDER / filename
 
+        # Timestamp
+        IST = timezone(timedelta(hours=5, minutes=30))
+        timestamp = datetime.now(IST).strftime("%d_%m_%Y-%H_%M_%S")
+
+        # Build final filename
+        clean_name = re.sub(r'[^\w\-]', '_', filename_input.strip()) if filename_input else "tts"
+        final_filename = f"{clean_name}_{timestamp}.mp3"
+        filepath = OUTPUT_FOLDER / final_filename
+
+        # Run Edge TTS async
         async def generate():
             communicator = edge_tts.Communicate(text_input, voice, rate=rate)
             await communicator.save(str(filepath))
@@ -174,11 +181,21 @@ def show_tts():
         asyncio.run(generate())
         delete_file_later(filepath)
 
-        with open(filepath, "rb") as audio_file:
-            audio_bytes = audio_file.read()
+        # Safely load audio
+        try:
+            with open(filepath, "rb") as audio_file:
+                audio_bytes = audio_file.read()
 
-        st.audio(audio_bytes, format="audio/mp3")
-        st.download_button("💾 Download Audio", audio_bytes, filename=filename, mime="audio/mp3")
+            st.audio(audio_bytes, format="audio/mp3")
+            st.download_button(
+                "💾 Download Audio",
+                data=audio_bytes,
+                file_name=final_filename,
+                mime="audio/mp3"
+            )
+        except Exception as e:
+            st.error(f"❌ Could not load or serve audio file: {e}")
+
 
 # === ENTRY POINT ===
 if __name__ == "__main__":
