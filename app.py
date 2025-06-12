@@ -121,15 +121,16 @@ def show_tts():
         "Hindi (hi-IN)": ["hi-IN-MadhurNeural", "hi-IN-SwaraNeural"]
     }
 
-    language_label = st.selectbox("Language", list(VOICES.keys()))
-    voice = st.selectbox("Voice", VOICES[language_label])
-    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.23, step=0.01)
-    filename_input = st.text_input("Optional File Name", "")
-    text_input = st.text_area("Text to Synthesize", height=150)
+    language_label = st.selectbox("🌐 Language", list(VOICES.keys()))
+    voice = st.selectbox("🗣️ Voice", VOICES[language_label])
+    speed = st.slider("⚡ Speed", min_value=0.5, max_value=2.0, value=1.23, step=0.01)
+    filename_input = st.text_input("📝 Optional File Name", "")
+    text_input = st.text_area("💬 Text to Synthesize", height=150)
+    autoplay = st.checkbox("🔁 Autoplay Audio", value=True)
 
     if st.button("🛠️ Synthesize"):
         if not text_input.strip():
-            st.warning("Please enter text.")
+            st.warning("⚠️ Please enter text.")
             return
 
         rate = f"{'+' if speed >= 1 else ''}{int((speed - 1) * 100)}%"
@@ -149,8 +150,9 @@ def show_tts():
         with open(filepath, "rb") as audio_file:
             audio_bytes = audio_file.read()
             audio_base64 = base64.b64encode(audio_bytes).decode()
-    
+
         auto = "autoplay" if autoplay else ""
+
         st.markdown(
             f"""
             <style>
@@ -172,7 +174,7 @@ def show_tts():
                 border-radius: 8px;
             }}
             </style>
-    
+
             <div class="custom-audio-player">
                 <audio controls {auto}>
                     <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
@@ -182,8 +184,8 @@ def show_tts():
             """,
             unsafe_allow_html=True
         )
-        st.download_button("💾 Download Audio", audio_bytes, file_name=final_filename, mime="audio/mp3")
 
+        st.download_button("💾 Download Audio", audio_bytes, file_name=final_filename, mime="audio/mp3")
 # === STT ===
 def show_stt():
     st.header("🎙️ YouTube Speech to Text")
