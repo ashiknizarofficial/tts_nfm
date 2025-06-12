@@ -2,17 +2,33 @@ import streamlit as st
 import os
 import re
 import tempfile
-from urllib.parse import urlparse, parse_qs
 import subprocess
-from groq import Groq
+import asyncio
+import edge_tts
+import threading
+import time
+import uuid
 import requests
-import streamlit.components.v1 as components
+from datetime import datetime, timezone, timedelta
+from urllib.parse import urlparse, parse_qs
+from groq import Groq
+from pathlib import Path
 
-# ==== CONFIGURE GROQ KEY ====
-GROQ_API_KEY = "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"
+# ==== CONFIG ====
+GROQ_API_KEY = "your_groq_api_key"
+VALID_USERNAME = "ashik"
+VALID_PASSWORD = "pwd"
 client = Groq(api_key=GROQ_API_KEY)
+OUTPUT_FOLDER = Path("static/audio")
+OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
 
-# ==== VIDEO ID PARSER ====
+# ==== SESSION STATE INIT ====
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "page" not in st.session_state:
+    st.session_state.page = "Login"
+
+# ==== UTILITY FUNCTIONS ====
 def extract_youtube_video_id(url):
     patterns = [
         r'youtu\.be/([^&?/]+)',
@@ -30,144 +46,138 @@ def extract_youtube_video_id(url):
             return query['v'][0]
     return None
 
-# ==== STATE INIT ====
-if "wav_file_path" not in st.session_state:
-    st.session_state.wav_file_path = None
-if "input_file_path" not in st.session_state:
-    st.session_state.input_file_path = None
-if "video_id" not in st.session_state:
-    st.session_state.video_id = None
-if "transcript_text" not in st.session_state:
-    st.session_state.transcript_text = ""
+def delete_file_later(filepath, delay=300):
+    def delete():
+        time.sleep(delay)
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except Exception:
+                pass
+    threading.Thread(target=delete, daemon=True).start()
 
-# ==== UI ====
-st.markdown("<h1 style='text-align: center;'>🎵 YouTube to Text Transcriber</h1>", unsafe_allow_html=True)
+# ==== LOGIN PAGE ====
+def show_login():
+    st.title("🔐 Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        if username == VALID_USERNAME and password == VALID_PASSWORD:
+            st.session_state.logged_in = True
+            st.session_state.page = "STT"
+        else:
+            st.error("❌ Invalid credentials")
 
-with st.expander("📌 Instructions", expanded=False):
-    st.markdown("""
-    1. Paste a YouTube video URL.
-    2. Click **Step 1** to download and convert to WAV.
-    3. Choose model and language.
-    4. Click **Transcribe**.
-    5. Copy or download the result!
-    """)
+# ==== STT PAGE ====
+def show_stt():
+    st.title("🎧 YouTube to Text")
+    youtube_url = st.text_input("Enter YouTube Video URL:")
+    language_map = {"Hindi": "hi", "English": "en", "Malayalam": "ml"}
+    selected_lang = st.selectbox("Choose Language:", list(language_map.keys()))
+    selected_model = st.selectbox("Choose STT Model:", ["Groq", "IITM ASR"])
 
-st.markdown("---")
+    if st.button("Download & Transcribe"):
+        video_id = extract_youtube_video_id(youtube_url)
+        if not video_id:
+            st.error("❌ Invalid YouTube URL")
+            return
 
-# ==== STEP 1: Download & Convert ====
-st.subheader("🛠️ Step 1: Download & Convert to WAV")
-youtube_url = st.text_input("Enter YouTube Video URL:")
-
-col1, col2 = st.columns([1, 4])
-with col1:
-    download_clicked = st.button("🎬 Convert")
-
-if download_clicked:
-    video_id = extract_youtube_video_id(youtube_url)
-    if not youtube_url or not video_id:
-        st.error("❌ Invalid YouTube URL.")
-    else:
-        with st.spinner("Downloading and converting..."):
+        with st.spinner("Processing..."):
             temp_dir = tempfile.mkdtemp()
             input_file = os.path.join(temp_dir, f"{video_id}.m4a")
             wav_file = os.path.join(temp_dir, f"{video_id}.wav")
 
             try:
                 subprocess.run([
-                    "yt-dlp",
-                    "-f", "bestaudio[ext=m4a]/bestaudio",
-                    "-o", input_file,
-                    f"https://www.youtube.com/watch?v={video_id}"
+                    "yt-dlp", "-f", "bestaudio[ext=m4a]/bestaudio",
+                    "-o", input_file, f"https://www.youtube.com/watch?v={video_id}"
                 ], check=True)
+                subprocess.run(["ffmpeg", "-y", "-i", input_file, wav_file], check=True)
+            except Exception as e:
+                st.error(f"Download/Conversion failed: {e}")
+                return
 
-                subprocess.run([
-                    "ffmpeg", "-y", "-i", input_file, wav_file
-                ], check=True)
+            lang_code = language_map[selected_lang]
+            transcript = ""
 
-                with open(wav_file, "rb") as f:
-                    st.download_button(
-                        label="⬇️ Download WAV File",
-                        data=f,
-                        file_name=f"{video_id}.wav",
-                        mime="audio/wav"
+            if selected_model == "Groq":
+                with open(input_file, "rb") as f:
+                    response = client.audio.transcriptions.create(
+                        file=(f"{video_id}.m4a", f.read()),
+                        model="whisper-large-v3",
+                        language=lang_code,
+                        response_format="verbose_json"
                     )
+                    transcript = response.text
+            else:
+                with open(wav_file, "rb") as f:
+                    files = {
+                        'file': f,
+                        'language': (None, selected_lang.lower()),
+                        'vtt': (None, 'true')
+                    }
+                    response = requests.post('https://asr.iitm.ac.in/internal/asr/decode', files=files)
+                    transcript = response.json().get("transcript", "No transcript found.")
 
-                # Save state
-                st.session_state.wav_file_path = wav_file
-                st.session_state.input_file_path = input_file
-                st.session_state.video_id = video_id
-                st.success("✅ Audio downloaded and converted.")
+            st.download_button("⬇️ Download WAV", open(wav_file, "rb"), file_name="audio.wav", mime="audio/wav")
+            st.text_area("Transcript:", transcript, height=300)
+            st.markdown(f"""
+            <button onclick="navigator.clipboard.writeText(`{transcript}`);" style="background-color:green;color:white;padding:10px;border:none;border-radius:5px;">
+                📋 Copy to Clipboard
+            </button>
+            """, unsafe_allow_html=True)
 
-            except subprocess.CalledProcessError as e:
-                st.error(f"❌ Conversion error: {e}")
-                st.stop()
+# ==== TTS PAGE ====
+def show_tts():
+    st.title("🗣️ Text to Speech")
 
-# ==== STEP 2: Transcribe ====
-if st.session_state.wav_file_path:
-    st.markdown("---")
-    st.subheader("🔤 Step 2: Transcribe Audio")
-
-    col1, col2 = st.columns(2)
-
-    language_map = {
-        "Hindi": "hi",
-        "English": "en",
-        "Malayalam": "ml"
+    VOICES = {
+        "Malayalam (ml-IN)": ["ml-IN-MidhunNeural", "ml-IN-SobhanaNeural"],
+        "English (en-US)": ["en-US-GuyNeural", "en-US-AriaNeural"],
+        "Hindi (hi-IN)": ["hi-IN-MadhurNeural", "hi-IN-SwaraNeural"]
     }
 
-    with col1:
-        selected_lang = st.selectbox("🗣️ Choose Language:", list(language_map.keys()))
-    with col2:
-        selected_model = st.selectbox("🤖 Choose Model:", ["Groq", "IITM ASR"])
+    language_label = st.selectbox("Language", list(VOICES.keys()))
+    voice = st.selectbox("Voice", VOICES[language_label])
+    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+    filename_input = st.text_input("Optional File Name", "")
+    text_input = st.text_area("Text to Synthesize", height=150)
 
-    lang_code = language_map[selected_lang]
+    if st.button("Synthesize"):
+        if not text_input.strip():
+            st.warning("Please enter some text.")
+        else:
+            rate_value = round((speed - 1) * 100)
+            rate = f"{'+' if rate_value >= 0 else ''}{rate_value}%"
 
-    if st.button("📝 Transcribe"):
-        with st.spinner("Transcribing..."):
-            try:
-                if selected_model == "Groq":
-                    with open(st.session_state.input_file_path, "rb") as f:
-                        transcription = client.audio.transcriptions.create(
-                            file=(f"{st.session_state.video_id}.m4a", f.read()),
-                            model="whisper-large-v3",
-                            language=lang_code,
-                            response_format="verbose_json"
-                        )
-                        st.session_state.transcript_text = transcription.text
+            IST = timezone(timedelta(hours=5, minutes=30))
+            timestamp = datetime.now(IST).strftime("%d-%m-%Y_%H-%M-%S")
+            filename = f"{filename_input.strip() + '_' if filename_input.strip() else ''}{timestamp}.mp3"
+            filepath = OUTPUT_FOLDER / filename
 
-                elif selected_model == "IITM ASR":
-                    with open(st.session_state.wav_file_path, "rb") as f:
-                        files = {
-                            'file': f,
-                            'language': (None, selected_lang.lower()),
-                            'vtt': (None, 'false'),
-                        }
-                        response = requests.post('https://asr.iitm.ac.in/internal/asr/decode', files=files)
-                        result = response.json()
-                        st.session_state.transcript_text = result.get("transcript", "No transcript found.")
+            async def generate():
+                communicator = edge_tts.Communicate(text_input, voice, rate=rate)
+                await communicator.save(str(filepath))
 
-                st.success("✅ Transcription complete!")
+            asyncio.run(generate())
+            delete_file_later(filepath)
 
-            except Exception as e:
-                st.error(f"❌ Transcription failed: {e}")
+            st.audio(str(filepath), format="audio/mp3")
+            with open(filepath, "rb") as audio_file:
+                st.download_button("💾 Download Audio", audio_file, filename=filename, mime="audio/mp3")
 
-# ==== TRANSCRIPT DISPLAY ====
-if st.session_state.transcript_text:
-    st.markdown("---")
-    st.subheader("📄 Transcription Result")
+# ==== MAIN NAVIGATION ====
+if not st.session_state.logged_in:
+    show_login()
+else:
+    st.sidebar.title("📌 Navigation")
+    page = st.sidebar.radio("Go to:", ["STT", "TTS", "Logout"])
 
-    st.text_area("Transcript:", value=st.session_state.transcript_text, height=300, key="final_output")
-
-    # Clipboard copy HTML
-    components.html(f"""
-    <button onclick="navigator.clipboard.writeText('{st.session_state.transcript_text.replace("'", "\\'").replace('"', '\\"')}');" style="
-        background-color: #4CAF50;
-        color: white;
-        padding: 10px 20px;
-        font-size: 16px;
-        margin-top: 10px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    ">📋 Copy to Clipboard</button>
-    """, height=70)
+    if page == "STT":
+        show_stt()
+    elif page == "TTS":
+        show_tts()
+    elif page == "Logout":
+        st.session_state.logged_in = False
+        st.session_state.page = "Login"
+        st.experimental_rerun()
