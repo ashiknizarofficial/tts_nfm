@@ -24,7 +24,11 @@ OUTPUT_FOLDER = Path("static/audio")
 OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # === COOKIES SETUP ===
-cookies = EncryptedCookieManager(prefix="stt_tts_app_")
+cookies = EncryptedCookieManager(
+    prefix="stt_tts_app_",
+    password="pwd"
+)
+
 if not cookies.ready():
     st.stop()
 
