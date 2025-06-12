@@ -146,8 +146,8 @@ def show_tts():
         delete_file_later(filepath)
 
         with open(filepath, "rb") as audio_file:
-        audio_bytes = audio_file.read()
-        audio_base64 = base64.b64encode(audio_bytes).decode()
+            audio_bytes = audio_file.read()
+            audio_base64 = base64.b64encode(audio_bytes).decode()
     
         # Embed autoplay audio
         st.markdown(
