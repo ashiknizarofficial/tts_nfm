@@ -7,9 +7,8 @@ import subprocess
 from groq import Groq
 import requests
 
-# ==== CONFIGURE GROQ KEY HERE ====
+# ==== CONFIGURE GROQ KEY ====
 GROQ_API_KEY = "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"
-
 client = Groq(api_key=GROQ_API_KEY)
 
 # ==== VIDEO ID PARSER ====
@@ -35,31 +34,21 @@ st.title("🎵 YouTube to WAV + Transcription")
 
 youtube_url = st.text_input("Enter YouTube Video URL:")
 
-language_map = {
-    "Hindi": "hi",
-    "English": "en",
-    "Malayalam": "ml"
-}
-selected_lang = st.selectbox("Choose Transcription Language:", list(language_map.keys()))
-lang_code = language_map[selected_lang]
+if "wav_file_path" not in st.session_state:
+    st.session_state.wav_file_path = None
+if "input_file_path" not in st.session_state:
+    st.session_state.input_file_path = None
+if "video_id" not in st.session_state:
+    st.session_state.video_id = None
 
-# Choose Transcription Model
-selected_model = st.selectbox("Choose Transcription Engine:", ["Groq", "IITM ASR"])
-
-# Temporary storage
-temp_dir = tempfile.mkdtemp()
-input_file = ""
-wav_file = ""
-video_id = extract_youtube_video_id(youtube_url)
-
-# Button to download and convert
+# === Step 1: Download and Convert ===
 if st.button("Step 1: Download & Convert to WAV"):
-    if not youtube_url:
-        st.warning("Please enter a YouTube URL.")
-    elif not video_id:
-        st.error("❌ Could not extract video ID.")
+    video_id = extract_youtube_video_id(youtube_url)
+    if not youtube_url or not video_id:
+        st.error("❌ Invalid YouTube URL.")
     else:
         with st.spinner("Downloading and converting..."):
+            temp_dir = tempfile.mkdtemp()
             input_file = os.path.join(temp_dir, f"{video_id}.m4a")
             wav_file = os.path.join(temp_dir, f"{video_id}.wav")
 
@@ -83,44 +72,56 @@ if st.button("Step 1: Download & Convert to WAV"):
                         mime="audio/wav"
                     )
 
-                st.success("✅ Download and conversion complete.")
+                st.success("✅ Audio downloaded and converted.")
+
+                # Save paths in session
+                st.session_state.wav_file_path = wav_file
+                st.session_state.input_file_path = input_file
+                st.session_state.video_id = video_id
 
             except subprocess.CalledProcessError as e:
-                st.error(f"❌ Error: {e}")
+                st.error(f"❌ Download/conversion error: {e}")
                 st.stop()
 
-# Button to transcribe
-if st.button("Step 2: Transcribe Audio"):
-    if not video_id:
-        st.warning("Please complete Step 1 first.")
-    else:
+# === Step 2: Transcription ===
+if st.session_state.wav_file_path:
+    st.markdown("---")
+    st.header("Step 2: Transcribe")
+
+    language_map = {
+        "Hindi": "hi",
+        "English": "en",
+        "Malayalam": "ml"
+    }
+    selected_lang = st.selectbox("Choose Language:", list(language_map.keys()))
+    lang_code = language_map[selected_lang]
+    selected_model = st.selectbox("Choose Transcription Engine:", ["Groq", "IITM ASR"])
+
+    if st.button("Transcribe Audio"):
         with st.spinner("Transcribing..."):
-            if selected_model == "Groq":
-                try:
-                    with open(input_file, "rb") as f:
+            try:
+                if selected_model == "Groq":
+                    with open(st.session_state.input_file_path, "rb") as f:
                         transcription = client.audio.transcriptions.create(
-                            file=(f"{video_id}.m4a", f.read()),
+                            file=(f"{st.session_state.video_id}.m4a", f.read()),
                             model="whisper-large-v3",
                             language=lang_code,
                             response_format="verbose_json"
                         )
-                    st.subheader("📝 Groq Transcription Output:")
+                    st.subheader("📝 Groq Transcription:")
                     st.text_area("Transcript:", value=transcription.text, height=300)
-                except Exception as e:
-                    st.error(f"❌ Groq transcription failed: {e}")
 
-            elif selected_model == "IITM ASR":
-                try:
-                    with open(wav_file, "rb") as f:
+                elif selected_model == "IITM ASR":
+                    with open(st.session_state.wav_file_path, "rb") as f:
                         files = {
                             'file': f,
                             'language': (None, selected_lang.lower()),
-                            'vtt': (None, 'true'),
+                            'vtt': (None, 'false'),
                         }
                         response = requests.post('https://asr.iitm.ac.in/internal/asr/decode', files=files)
                         result = response.json()
-
-                    st.subheader("📝 IITM ASR Transcription Output:")
+                    st.subheader("📝 IITM ASR Transcription:")
                     st.text_area("Transcript:", value=result.get("transcript", "No transcript found."), height=300)
-                except Exception as e:
-                    st.error(f"❌ IITM transcription failed: {e}")
+
+            except Exception as e:
+                st.error(f"❌ Transcription failed: {e}")
