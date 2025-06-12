@@ -36,14 +36,16 @@ def login():
     if login_btn:
         if username == VALID_USERNAME and password == VALID_PASSWORD:
             st.session_state.authenticated = True
-            st.experimental_rerun()
+            st.rerun()
+
         else:
             st.error("❌ Invalid credentials")
 
 # ==== LOGOUT ====
 def logout():
     st.session_state.authenticated = False
-    st.experimental_rerun()
+    st.rerun()
+
 
 # ==== TRANSCRIPTION ====
 language_map = {
