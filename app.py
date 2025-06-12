@@ -69,63 +69,52 @@ def show_login():
             st.error("❌ Invalid credentials")
 
 # ==== STT PAGE ====
-def show_stt():
-    st.title("🎧 YouTube to Text")
-    youtube_url = st.text_input("Enter YouTube Video URL:")
-    language_map = {"Hindi": "hi", "English": "en", "Malayalam": "ml"}
-    selected_lang = st.selectbox("Choose Language:", list(language_map.keys()))
-    selected_model = st.selectbox("Choose STT Model:", ["Groq", "IITM ASR"])
+def show_tts():
+    st.title("🗣️ Text to Speech")
 
-    if st.button("Download & Transcribe"):
-        video_id = extract_youtube_video_id(youtube_url)
-        if not video_id:
-            st.error("❌ Invalid YouTube URL")
-            return
+    VOICES = {
+        "Malayalam (ml-IN)": ["ml-IN-MidhunNeural", "ml-IN-SobhanaNeural"],
+        "English (en-US)": ["en-US-GuyNeural", "en-US-AriaNeural"],
+        "Hindi (hi-IN)": ["hi-IN-MadhurNeural", "hi-IN-SwaraNeural"]
+    }
 
-        with st.spinner("Processing..."):
-            temp_dir = tempfile.mkdtemp()
-            input_file = os.path.join(temp_dir, f"{video_id}.m4a")
-            wav_file = os.path.join(temp_dir, f"{video_id}.wav")
+    language_label = st.selectbox("Language", list(VOICES.keys()))
+    voice = st.selectbox("Voice", VOICES[language_label])
+    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+    filename_input = st.text_input("Optional File Name", "")
+    text_input = st.text_area("Text to Synthesize", height=150)
 
-            try:
-                subprocess.run([
-                    "yt-dlp", "-f", "bestaudio[ext=m4a]/bestaudio",
-                    "-o", input_file, f"https://www.youtube.com/watch?v={video_id}"
-                ], check=True)
-                subprocess.run(["ffmpeg", "-y", "-i", input_file, wav_file], check=True)
-            except Exception as e:
-                st.error(f"Download/Conversion failed: {e}")
-                return
+    if st.button("Synthesize"):
+        if not text_input.strip():
+            st.warning("Please enter some text.")
+        else:
+            rate_value = round((speed - 1) * 100)
+            rate = f"{'+' if rate_value >= 0 else ''}{rate_value}%"
 
-            lang_code = language_map[selected_lang]
-            transcript = ""
+            # Generate timestamped filename with IST
+            IST = timezone(timedelta(hours=5, minutes=30))
+            timestamp = datetime.now(IST).strftime("%d-%m-%Y_%H-%M-%S")
+            filename = f"{filename_input.strip() + '_' if filename_input.strip() else ''}{timestamp}.mp3"
+            filepath = OUTPUT_FOLDER / filename
 
-            if selected_model == "Groq":
-                with open(input_file, "rb") as f:
-                    response = client.audio.transcriptions.create(
-                        file=(f"{video_id}.m4a", f.read()),
-                        model="whisper-large-v3",
-                        language=lang_code,
-                        response_format="verbose_json"
-                    )
-                    transcript = response.text
-            else:
-                with open(wav_file, "rb") as f:
-                    files = {
-                        'file': f,
-                        'language': (None, selected_lang.lower()),
-                        'vtt': (None, 'false')
-                    }
-                    response = requests.post('https://asr.iitm.ac.in/internal/asr/decode', files=files)
-                    transcript = response.json().get("transcript", "No transcript found.")
+            async def generate():
+                communicator = edge_tts.Communicate(text_input, voice, rate=rate)
+                await communicator.save(str(filepath))
 
-            st.download_button("⬇️ Download WAV", open(wav_file, "rb"), file_name="audio.wav", mime="audio/wav")
-            st.text_area("Transcript:", transcript, height=300)
-            st.markdown(f"""
-            <button onclick="navigator.clipboard.writeText(`{transcript}`);" style="background-color:green;color:white;padding:10px;border:none;border-radius:5px;">
-                📋 Copy to Clipboard
-            </button>
-            """, unsafe_allow_html=True)
+            asyncio.run(generate())
+            delete_file_later(filepath)
+
+            # Read file bytes once
+            with open(filepath, "rb") as audio_file:
+                audio_bytes = audio_file.read()
+
+            st.audio(audio_bytes, format="audio/mp3")
+            st.download_button(
+                label="💾 Download Audio",
+                data=audio_bytes,
+                file_name=filename,
+                mime="audio/mp3"
+            )
 
 # ==== TTS PAGE ====
 def show_tts():
