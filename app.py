@@ -151,7 +151,7 @@ def show_tts():
 
     language_label = st.selectbox("Language", list(VOICES.keys()))
     voice = st.selectbox("Voice", VOICES[language_label])
-    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.0, step=0.1)
+    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.23, step=0.1)
     filename_input = st.text_input("Optional File Name (without extension)", "")
     text_input = st.text_area("Text to Synthesize", height=150)
 
@@ -169,7 +169,7 @@ def show_tts():
         timestamp = datetime.now(IST).strftime("%d_%m_%Y-%H_%M_%S")
 
         # Build final filename
-        clean_name = re.sub(r'[^\w\-]', '_', filename_input.strip()) if filename_input else "tts"
+        clean_name = re.sub(r'[^\w\-]', '_', filename_input.strip()) if filename_input else ""
         final_filename = f"{clean_name}_{timestamp}.mp3"
         filepath = OUTPUT_FOLDER / final_filename
 
