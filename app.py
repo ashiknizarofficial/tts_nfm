@@ -240,20 +240,28 @@ def show_stt():
                 return
 
         st.subheader("📄 Transcript Output")
-        st.text_area("Transcript", transcript, height=300, key="transcript_area")
-
-        st.markdown("""
-            <button id="copy-button">📋 Copy to Clipboard</button>
-            <script>
-            const copyButton = document.getElementById("copy-button");
-            copyButton.onclick = function() {
-                const text = document.querySelector('textarea[data-testid="stTextArea"]').value;
-                navigator.clipboard.writeText(text).then(function() {
-                    copyButton.innerText = "✅ Copied!";
-                });
-            };
-            </script>
-        """, unsafe_allow_html=True)
+        # Show transcript in a text area
+        transcript_area = st.text_area("📄 Transcript Output", transcript, height=300, key="transcript")
+        
+        # JavaScript clipboard copy logic
+        copy_js = f"""
+        <script>
+        function copyToClipboard(text) {{
+            navigator.clipboard.writeText(text).then(function() {{
+                const btn = document.getElementById("copy-btn");
+                if (btn) btn.innerText = "✅ Copied!";
+            }}, function(err) {{
+                console.error("Could not copy text: ", err);
+            }});
+        }}
+        </script>
+        
+        <button id="copy-btn" onclick="copyToClipboard(`{transcript.replace('`', '\\`')}`)">📋 Copy to Clipboard</button>
+        """
+        
+        # Render JavaScript button
+        st.markdown(copy_js, unsafe_allow_html=True)
+        
 
 
 # === ENTRY POINT ===
