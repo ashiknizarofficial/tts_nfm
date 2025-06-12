@@ -9,6 +9,7 @@ from pathlib import Path
 import requests
 import uuid
 from groq import Groq
+import streamlit.components.v1 as components
 import edge_tts
 import base64
 # === CONFIG ===
@@ -240,21 +241,30 @@ def show_stt():
                 return
 
         st.subheader("📄 Transcript Output")
-        st.text_area("Transcript:", value=st.session_state.transcript_text, height=300, key="final_output")
-    
-        # Clipboard copy HTML
+        # Show transcript
+        st.text_area("📄 Transcript Output", transcript, height=300, key="transcript")
+        
+        # Render a true HTML/JS button for clipboard
         components.html(f"""
-        <button onclick="navigator.clipboard.writeText('{st.session_state.transcript_text.replace("'", "\\'").replace('"', '\\"')}');" style="
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            font-size: 16px;
-            margin-top: 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        ">📋 Copy to Clipboard</button>
-        """, height=70)
+            <script>
+            function copyText() {{
+                var text = `{transcript.replace("`", "\\`")}`;
+                navigator.clipboard.writeText(text).then(() => {{
+                    const btn = document.getElementById("copy-btn");
+                    if (btn) btn.innerText = "✅ Copied!";
+                }});
+            }}
+            </script>
+            <button id="copy-btn" onclick="copyText()" style="
+                padding: 0.5em 1em;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 16px;
+            ">📋 Copy to Clipboard</button>
+        """, height=60)
             
     
 
