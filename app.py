@@ -25,16 +25,24 @@ if "authenticated" not in st.session_state:
 
 def login():
     st.title("🔐 Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    username = st.text_input("Username", key="login_username")
+    password = st.text_input("Password", type="password", key="login_password")
+
     login_btn = st.button("Login")
 
+    # Use session flag to trigger rerun after setting authentication
     if login_btn:
         if username == VALID_USERNAME and password == VALID_PASSWORD:
             st.session_state.authenticated = True
-            st.experimental_rerun()
+            st.session_state.logged_in = True  # Flag for rerun trigger
         else:
             st.error("❌ Invalid credentials")
+
+    # Trigger rerun *after* the widget declarations
+    if st.session_state.get("logged_in"):
+        del st.session_state.logged_in  # Remove trigger after use
+        st.experimental_rerun()
+
 
 def logout():
     st.session_state.authenticated = False
