@@ -10,6 +10,16 @@ from groq import Groq
 import edge_tts
 from pathlib import Path
 from streamlit_cookies_manager import EncryptedCookieManager
+import streamlit as st
+
+# MUST BE FIRST STREAMLIT CALL
+st.set_page_config(page_title="STT + TTS", layout="centered")
+
+# now you can use session_state, etc.
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# ... rest of your code
 
 # === CONFIGURATION ===
 GROQ_API_KEY = "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"
@@ -196,7 +206,7 @@ def show_tts():
 
 # === MAIN ===
 def main():
-    st.set_page_config(page_title="STT + TTS", layout="centered")
+    
     if not st.session_state.authenticated:
         login()
     else:
