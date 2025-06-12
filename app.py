@@ -10,7 +10,7 @@ import requests
 import uuid
 from groq import Groq
 import edge_tts
-
+import base64
 # === CONFIG ===
 GROQ_API_KEY = "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"
 VALID_USERNAME = "ashik"
@@ -122,7 +122,7 @@ def show_tts():
 
     language_label = st.selectbox("Language", list(VOICES.keys()))
     voice = st.selectbox("Voice", VOICES[language_label])
-    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.2, step=0.1)
+    speed = st.slider("Speed", min_value=0.5, max_value=2.0, value=1.23, step=0.01)
     filename_input = st.text_input("Optional File Name", "")
     text_input = st.text_area("Text to Synthesize", height=150)
 
@@ -146,9 +146,19 @@ def show_tts():
         delete_file_later(filepath)
 
         with open(filepath, "rb") as audio_file:
-            audio_bytes = audio_file.read()
-
-        st.audio(audio_bytes, format="audio/mp3")
+        audio_bytes = audio_file.read()
+        audio_base64 = base64.b64encode(audio_bytes).decode()
+    
+        # Embed autoplay audio
+        st.markdown(
+            f"""
+            <audio controls autoplay>
+                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                Your browser does not support the audio element.
+            </audio>
+            """,
+            unsafe_allow_html=True
+        )
         st.download_button("💾 Download Audio", audio_bytes, file_name=final_filename, mime="audio/mp3")
 
 # === STT ===
