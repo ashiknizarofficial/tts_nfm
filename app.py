@@ -10,6 +10,10 @@ import uuid
 from groq import Groq
 import edge_tts
 from pathlib import Path
+import pyperclip
+import re
+import tempfile
+from urllib.parse import urlparse, parse_qs
 
 # === CONFIGURATION ===
 GROQ_API_KEY = "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"
@@ -55,7 +59,11 @@ def delete_file_later(filepath, delay=300):
         except:
             pass
     threading.Thread(target=delayed_delete, daemon=True).start()
-
+language_map = {
+    "Hindi": "hi",
+    "English": "en",
+    "Malayalam": "ml"
+}
 def extract_youtube_video_id(url):
     patterns = [
         r'youtu\.be/([^&?/]+)',
@@ -70,75 +78,98 @@ def extract_youtube_video_id(url):
 
 # === STT FUNCTION ===
 def show_stt():
-    st.title("🎤 Speech to Text (STT) from YouTube")
+    st.title("🎙️ YouTube Speech to Text (STT)")
 
+    # Step 1: YouTube Download & WAV Conversion
+    st.subheader("Step 1: Download YouTube Audio & Convert to WAV")
     youtube_url = st.text_input("Enter YouTube Video URL:")
-    model_choice = st.radio("Choose STT Engine:", ["Groq", "IITM-ASR"])
-    language_map = {"Hindi": "hi", "English": "en", "Malayalam": "ml"}
-    selected_lang = st.selectbox("Choose Transcription Language:", list(language_map.keys()))
-    lang_code = language_map[selected_lang]
 
-    if st.button("🔽 Download & Convert to WAV"):
+    if st.button("🎵 Download & Convert"):
         if not youtube_url:
-            st.warning("Enter a YouTube URL")
+            st.warning("Please enter a YouTube URL.")
             return
 
         video_id = extract_youtube_video_id(youtube_url)
-        temp_dir = tempfile.mkdtemp()
-        m4a_path = os.path.join(temp_dir, f"{video_id}.m4a")
-        wav_path = os.path.join(temp_dir, f"{video_id}.wav")
-
-        # Download
-        try:
-            subprocess.run(["yt-dlp", "-f", "bestaudio[ext=m4a]/bestaudio",
-                            "-o", m4a_path, youtube_url], check=True)
-            subprocess.run(["ffmpeg", "-y", "-i", m4a_path, wav_path], check=True)
-            st.audio(wav_path, format="audio/wav")
-
-            with open(wav_path, "rb") as f:
-                st.download_button("⬇️ Download WAV", f, file_name=f"{video_id}.wav", mime="audio/wav")
-
-            st.session_state.wav_file = wav_path
-            st.session_state.model_choice = model_choice
-            st.session_state.lang_code = lang_code
-
-        except Exception as e:
-            st.error(f"Download or conversion failed: {e}")
+        if not video_id:
+            st.error("❌ Could not extract video ID.")
             return
 
-    if "wav_file" in st.session_state and st.button("🧠 Transcribe"):
-        wav_path = st.session_state.wav_file
-        lang_code = st.session_state.lang_code
+        with st.spinner("Downloading and converting..."):
+            temp_dir = tempfile.mkdtemp()
+            input_file = os.path.join(temp_dir, f"{video_id}.m4a")
+            wav_file = os.path.join(temp_dir, f"{video_id}.wav")
 
-        if st.session_state.model_choice == "Groq":
-            with open(wav_path, "rb") as f:
-                try:
+            try:
+                subprocess.run([
+                    "yt-dlp",
+                    "-f", "bestaudio[ext=m4a]/bestaudio",
+                    "-o", input_file,
+                    f"https://www.youtube.com/watch?v={video_id}"
+                ], check=True)
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", input_file, wav_file
+                ], check=True)
+
+                st.success("✅ Audio downloaded and converted to WAV.")
+                st.audio(wav_file, format="audio/wav")
+
+                # Save to session for use later
+                st.session_state['wav_file'] = wav_file
+                st.download_button("⬇️ Download WAV", open(wav_file, "rb"), f"{video_id}.wav", mime="audio/wav")
+
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+                return
+
+    # Step 2: Select Engine
+    st.subheader("Step 2: Select Transcription Engine")
+    engine = st.radio("Choose STT Engine", ["Groq", "IITM"])
+
+    # Step 3: Select Language & Transcribe
+    st.subheader("Step 3: Choose Language & Transcribe")
+    selected_lang = st.selectbox("Transcription Language", list(language_map.keys()))
+    lang_code = language_map[selected_lang]
+
+    if st.button("📝 Transcribe Audio"):
+        if 'wav_file' not in st.session_state:
+            st.warning("Please complete Step 1 first.")
+            return
+
+        wav_file = st.session_state['wav_file']
+
+        if engine == "Groq":
+            try:
+                with open(wav_file, "rb") as f:
                     transcription = client.audio.transcriptions.create(
-                        file=("audio.wav", f.read()),
+                        file=(os.path.basename(wav_file), f.read()),
                         model="whisper-large-v3",
                         language=lang_code,
                         response_format="verbose_json"
                     )
-                    st.text_area("📝 Transcript", transcription.text, height=300)
-                    st.code(transcription.text)
-                    st.button("📋 Copy Transcript", on_click=st.experimental_set_query_params, kwargs={"copied": transcription.text})
-                except Exception as e:
-                    st.error(f"Groq STT failed: {e}")
+                transcript = transcription.text
+            except Exception as e:
+                st.error(f"❌ Groq error: {e}")
+                return
 
-        elif st.session_state.model_choice == "IITM-ASR":
+        elif engine == "IITM":
             try:
-                with open(wav_path, 'rb') as f:
+                with open(wav_file, "rb") as f:
                     files = {
                         'file': f,
-                        'language': (None, lang_code),
-                        'vtt': (None, 'true')
+                        'language': (None, selected_lang.lower()),
+                        'vtt': (None, 'false'),
                     }
                     response = requests.post('https://asr.iitm.ac.in/internal/asr/decode', files=files)
-                    data = response.json()
-                    st.text_area("📝 Transcript", data.get("text", ""), height=300)
+                    result = response.json()
+                    transcript = result.get("transcript", "No transcript found.")
             except Exception as e:
-                st.error(f"IITM STT failed: {e}")
+                st.error(f"❌ IITM error: {e}")
+                return
 
+        # Step 4: Display & Copy
+        st.subheader("📄 Transcript Output")
+        st.text_area("Transcript", transcript, height=300)
+        st.button("📋 Copy to Clipboard", on_click=lambda: pyperclip.copy(transcript))
 # === TTS FUNCTION ===
 def show_tts():
     st.title("🗣️ Text to Speech (TTS)")
@@ -169,7 +200,7 @@ def show_tts():
         timestamp = datetime.now(IST).strftime("%d_%m_%Y-%H_%M_%S")
 
         # Build final filename
-        clean_name = re.sub(r'[^\w\-]', '_', filename_input.strip()) if filename_input else ""
+        clean_name = re.sub(r'[^\w\-]', '_', filename_input.strip()) if filename_input else "NFM"
         final_filename = f"{clean_name}_{timestamp}.mp3"
         filepath = OUTPUT_FOLDER / final_filename
 
