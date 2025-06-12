@@ -5,3 +5,4 @@ edge-tts
 requests
 apscheduler==3.6.3
 pytz
+pyperclip
