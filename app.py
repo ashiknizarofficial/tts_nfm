@@ -240,29 +240,23 @@ def show_stt():
                 return
 
         st.subheader("📄 Transcript Output")
-        # Show transcript in a text area
-        transcript_area = st.text_area("📄 Transcript Output", transcript, height=300, key="transcript")
-        
-        # JavaScript clipboard copy logic
-        copy_js = f"""
-        <script>
-        function copyToClipboard(text) {{
-            navigator.clipboard.writeText(text).then(function() {{
-                const btn = document.getElementById("copy-btn");
-                if (btn) btn.innerText = "✅ Copied!";
-            }}, function(err) {{
-                console.error("Could not copy text: ", err);
-            }});
-        }}
-        </script>
-        
-        <button id="copy-btn" onclick="copyToClipboard(`{transcript.replace('`', '\\`')}`)">📋 Copy to Clipboard</button>
-        """
-        
-        # Render JavaScript button
-        st.markdown(copy_js, unsafe_allow_html=True)
-        
-
+        st.text_area("Transcript:", value=st.session_state.transcript_text, height=300, key="final_output")
+    
+        # Clipboard copy HTML
+        components.html(f"""
+        <button onclick="navigator.clipboard.writeText('{st.session_state.transcript_text.replace("'", "\\'").replace('"', '\\"')}');" style="
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        ">📋 Copy to Clipboard</button>
+        """, height=70)
+            
+    
 
 # === ENTRY POINT ===
 if __name__ == "__main__":
