@@ -240,8 +240,21 @@ def show_stt():
                 return
 
         st.subheader("📄 Transcript Output")
-        st.text_area("Transcript", transcript, height=300)
-        copy_to_clipboard(transcript)
+        st.text_area("Transcript", transcript, height=300, key="transcript_area")
+
+        st.markdown("""
+            <button id="copy-button">📋 Copy to Clipboard</button>
+            <script>
+            const copyButton = document.getElementById("copy-button");
+            copyButton.onclick = function() {
+                const text = document.querySelector('textarea[data-testid="stTextArea"]').value;
+                navigator.clipboard.writeText(text).then(function() {
+                    copyButton.innerText = "✅ Copied!";
+                });
+            };
+            </script>
+        """, unsafe_allow_html=True)
+
 
 # === ENTRY POINT ===
 if __name__ == "__main__":
